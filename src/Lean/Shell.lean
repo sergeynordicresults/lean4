@@ -9,6 +9,7 @@ prelude
 public import Lean.Elab.Frontend
 public import Lean.Elab.ParseImportsFast
 public import Lean.Compiler.IR.EmitC
+public import Lean.Compiler.IR.EmitJavascript
 
 public section
 
@@ -106,6 +107,7 @@ private def displayHelp (useStderr : Bool) : IO Unit := do
   out.putStrLn    "  -i, --i=iname          create ilean file"
   out.putStrLn    "  -c, --c=fname          name of the C output file"
   out.putStrLn    "  -b, --bc=fname         name of the LLVM bitcode file"
+  out.putStrLn    "  -A, --javascript=fname name of the Javascript bitcode file"
   out.putStrLn    "      --stdin            take input from stdin"
   out.putStrLn    "      --root=dir         set package root directory from which the module name\n"
   out.putStrLn    "                         of the input file is calculated\n"
@@ -152,6 +154,7 @@ private def shellMain
     (ileanFileName? : Option System.FilePath := none)
     (cFileName? : Option System.FilePath := none)
     (bcFileName? : Option System.FilePath := none)
+    (javascriptFileName? : Option System.FilePath := none)
     (jsonOutput : Bool := false)
     (errorOnKinds : Array Name := #[])
     (printStats : Bool := false)
@@ -236,6 +239,13 @@ private def shellMain
       initLLVM
       profileitIO "LLVM code generation" opts do
         emitLLVM env mainModuleName bc
+    if let some javascript := javascriptFileName? then
+      let .ok out ← IO.FS.Handle.mk javascript .write |>.toBaseIO
+        | IO.eprintln s!"failed to create '{javascript}'"
+          return 1
+      profileitIO "javascript code generation" opts do
+        let data ← IO.ofExcept <| IR.emitJavascript env mainModuleName
+        out.write data.toUTF8
   displayCumulativeProfilingTimes
   if Internal.hasAddressSanitizer () then
     return if env?.isSome then 0 else 1
